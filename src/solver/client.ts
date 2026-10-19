@@ -1,4 +1,4 @@
-import { solve, type Plan } from "./solve.ts";
+import { solveWithAlternative, type Solution } from "./solve.ts";
 import type { Tier } from "./tier.ts";
 
 export interface SolveRequest {
@@ -8,7 +8,7 @@ export interface SolveRequest {
 }
 
 export type SolveResponse =
-  | { id: number; ok: true; plan: Plan }
+  | { id: number; ok: true; solution: Solution }
   | { id: number; ok: false; error: string };
 
 let worker: Worker | undefined;
@@ -27,14 +27,14 @@ function getWorker() {
 }
 
 /** Runs the solver off the main thread, falling back to the main thread without Worker support. */
-export function solveAsync(tiers: Tier[], budget: number): Promise<Plan> {
+export function solveAsync(tiers: Tier[], budget: number): Promise<Solution> {
   if (typeof Worker === "undefined") {
-    return new Promise((resolve) => resolve(solve(tiers, budget)));
+    return new Promise((resolve) => resolve(solveWithAlternative(tiers, budget)));
   }
   const id = nextId++;
   return new Promise((resolve, reject) => {
     pending.set(id, (response) => {
-      if (response.ok) resolve(response.plan);
+      if (response.ok) resolve(response.solution);
       else reject(new Error(response.error));
     });
     getWorker().postMessage({ id, tiers, budget } satisfies SolveRequest);

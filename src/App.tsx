@@ -89,8 +89,8 @@ export default function App() {
     setSolving(true);
     setError(null);
     try {
-      const plan = await solveAsync(toSolverTiers(state.items), budget);
-      setResult({ plan, budget, tiers, key });
+      const { plan, alternative } = await solveAsync(toSolverTiers(state.items), budget);
+      setResult({ plan, alternative, budget, tiers, key });
       if (window.matchMedia("(max-width: 1023px)").matches) {
         outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }

@@ -119,6 +119,16 @@ Neighbouring items can be **linked** to share the same priority. A group of link
 
   - **Total Items Purchased:** Sum of all units across all bought items.
 
+- **Priority-First Alternative:**
+
+  - The solver also computes a **priority-first** plan that ignores the remainder: the most Tier 1 units that fit the budget, then the most Tier 2 units that fit the coins left, and so on.
+
+  - When that plan buys different quantities from the main plan, the output shows it in a separate "Alternative · priority first" card below the main plan. The card lists only the items whose quantity changes (new quantity and difference from the main plan), the coins it leaves unspent, its total spent and its total units.
+
+  - When both plans buy the same quantities, no alternative card is shown.
+
+  - Example: budget `1555`, items costing 30, 13 and 17. The main plan is 49× / 0× / 5× (remainder 0). The alternative is 51× / 1× / 0× (remainder 12).
+
 3\. User Experience (UX) Requirements
 -------------------------------------
 

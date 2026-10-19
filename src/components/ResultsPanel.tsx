@@ -4,6 +4,8 @@ import { tierAccent } from "./tierAccent.ts";
 
 export interface SolvedResult {
   plan: Plan;
+  /** Strict priority plan, shown only when it differs from `plan`. */
+  alternative: Plan | null;
   budget: number;
   /** Rows as they were when the plan was calculated, grouped by tier. */
   tiers: Item[][];
@@ -30,6 +32,73 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: st
   );
 }
 
+function AlternativeCard({
+  plan,
+  alternative,
+  tiers,
+}: {
+  plan: Plan;
+  alternative: Plan;
+  tiers: Item[][];
+}) {
+  const changes = tiers.flatMap((tier, t) =>
+    tier
+      .map((item) => ({
+        item,
+        priority: t + 1,
+        qty: alternative.quantities[item.id] ?? 0,
+        delta: (alternative.quantities[item.id] ?? 0) - (plan.quantities[item.id] ?? 0),
+      }))
+      .filter((change) => change.delta !== 0),
+  );
+
+  return (
+    <section
+      aria-labelledby="alternative-heading"
+      className="rounded-base border border-dashed border-hairline bg-void/40 p-3"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="alternative-heading" className="font-mono text-label-sm text-tactical uppercase">
+          Alternative · priority first
+        </h3>
+        <span className="font-mono text-label-sm text-gold uppercase">
+          {format(alternative.remainder)} left
+        </span>
+      </div>
+      <p className="mt-1 text-body-sm text-ghost">
+        Buys more of your top priorities, but leaves {format(alternative.remainder)}{" "}
+        {alternative.remainder === 1 ? "coin" : "coins"} unspent.
+      </p>
+      <ul className="mt-2 divide-y divide-layer">
+        {changes.map(({ item, priority, qty, delta }) => (
+          <li key={item.id} className="flex items-baseline gap-3 py-1.5">
+            <span className={`w-8 shrink-0 font-mono text-label-sm ${tierAccent(priority).text}`}>
+              P{String(priority).padStart(2, "0")}
+            </span>
+            <span
+              className={`w-14 shrink-0 font-mono text-code-num ${qty === 0 ? "text-ghost" : "text-gold-bright"}`}
+            >
+              {format(qty)}×
+            </span>
+            <span className="min-w-0 flex-1 truncate text-body-md">
+              {item.name.trim() || "Untitled item"}
+            </span>
+            <span
+              className={`shrink-0 font-mono text-code-num ${delta > 0 ? "text-solved-bright" : "text-tactical"}`}
+            >
+              {delta > 0 ? "+" : "−"}
+              {format(Math.abs(delta))}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 font-mono text-label-sm text-tactical">
+        Spends {format(alternative.spent)} · {format(alternative.totalUnits)} items
+      </p>
+    </section>
+  );
+}
+
 export function ResultsPanel({ result, stale, error }: ResultsPanelProps) {
   if (error) {
     return (
@@ -53,7 +122,7 @@ export function ResultsPanel({ result, stale, error }: ResultsPanelProps) {
     );
   }
 
-  const { plan, budget, tiers } = result;
+  const { plan, alternative, budget, tiers } = result;
   const solved = plan.remainder === 0;
 
   return (
@@ -130,6 +199,8 @@ export function ResultsPanel({ result, stale, error }: ResultsPanelProps) {
           </li>
         ))}
       </ol>
+
+      {alternative && <AlternativeCard plan={plan} alternative={alternative} tiers={tiers} />}
 
       <dl className="sticky bottom-0 -mx-4 -mb-4 grid grid-cols-3 gap-3 rounded-b-lg border-t border-layer bg-pod/95 px-4 py-3 backdrop-blur-md">
         <Metric label="Total spent" value={format(plan.spent)} tone="text-frost" />

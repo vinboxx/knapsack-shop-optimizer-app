@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { MAX_BUDGET, SolverInputError, solve } from "./solve.ts";
+import {
+  MAX_BUDGET,
+  SolverInputError,
+  solve,
+  solvePriorityFirst,
+  solveWithAlternative,
+} from "./solve.ts";
 import { maxUnits, splitTier, tierCost, tierSegments, type SolverItem, type Tier } from "./tier.ts";
 
 const item = (id: string, cost: number, limit?: number): SolverItem => ({ id, cost, limit });
@@ -44,6 +50,29 @@ function bruteForce(tiers: Tier[], budget: number) {
       ) {
         best = { remainder: left, units: [...units] };
       }
+      return;
+    }
+    const tier = tiers[j]!;
+    const cap = Math.min(maxUnits(tierSegments(tier)), budget);
+    for (let t = 0; t <= cap; t++) {
+      const cost = naiveCost(tier, t);
+      if (cost > left) break;
+      units.push(t);
+      visit(j + 1, left - cost);
+      units.pop();
+    }
+  };
+  visit(0, budget);
+  return best!;
+}
+
+/** Tries every combination of tier totals that fits, keeping the lexicographically largest. */
+function bruteForcePriorityFirst(tiers: Tier[], budget: number) {
+  let best: number[] | undefined;
+  const units: number[] = [];
+  const visit = (j: number, left: number) => {
+    if (j === tiers.length) {
+      if (!best || lexGreater(units, best)) best = [...units];
       return;
     }
     const tier = tiers[j]!;
@@ -199,5 +228,61 @@ describe("solve", () => {
     expect(() => solve([[]], 10)).toThrow(SolverInputError);
     const thirteen = Array.from({ length: 13 }, (_, i) => [item(String(i), 1)]);
     expect(() => solve(thirteen, 10)).toThrow(SolverInputError);
+  });
+});
+
+describe("solvePriorityFirst", () => {
+  it("buys the most of each tier in turn, even if coins are left", () => {
+    const tiers = [[item("vision", 30)], [item("guide", 13)], [item("design", 17)]];
+    const plan = solvePriorityFirst(tiers, 1555);
+    expect(plan.quantities).toEqual({ vision: 51, guide: 1, design: 0 });
+    expect(plan.spent).toBe(1543);
+    expect(plan.remainder).toBe(12);
+    expect(plan.totalUnits).toBe(52);
+  });
+
+  it("splits a linked tier and respects limits", () => {
+    const plan = solvePriorityFirst([[item("a", 10, 2), item("b", 10)], [item("c", 3)]], 105);
+    expect(plan.quantities).toEqual({ a: 2, b: 8, c: 1 });
+    expect(plan.remainder).toBe(2);
+  });
+
+  it("matches a brute-force search on random small inputs", () => {
+    const random = seeded(7);
+    const int = (min: number, max: number) => min + Math.floor(random() * (max - min + 1));
+    let id = 0;
+    for (let run = 0; run < 150; run++) {
+      const tiers: Tier[] = Array.from({ length: int(1, 4) }, () =>
+        Array.from({ length: int(1, 3) }, () =>
+          item(String(id++), int(1, 25), random() < 0.5 ? int(1, 8) : undefined),
+        ),
+      );
+      const budget = int(1, 150);
+      expect(solvePriorityFirst(tiers, budget).tierUnits).toEqual(
+        bruteForcePriorityFirst(tiers, budget),
+      );
+    }
+  });
+});
+
+describe("solveWithAlternative", () => {
+  it("offers the priority-first plan when it differs", () => {
+    const tiers = [[item("vision", 30)], [item("guide", 13)], [item("design", 17)]];
+    const { plan, alternative } = solveWithAlternative(tiers, 1555);
+    expect(plan.quantities).toEqual({ vision: 49, guide: 0, design: 5 });
+    expect(plan.remainder).toBe(0);
+    expect(alternative?.quantities).toEqual({ vision: 51, guide: 1, design: 0 });
+  });
+
+  it("offers no alternative when both plans buy the same", () => {
+    expect(solveWithAlternative([[item("a", 5)], [item("b", 3)]], 20).alternative).toBeNull();
+    expect(solveWithAlternative([[item("a", 10, 2)], [item("b", 7)]], 34).alternative).toBeNull();
+  });
+
+  it("offers an alternative for the spec walkthrough", () => {
+    const tiers = [[item("18", 18)], [item("13", 13, 1175)], [item("14", 14)]];
+    const { alternative } = solveWithAlternative(tiers, 1555);
+    expect(alternative?.quantities).toEqual({ "18": 86, "13": 0, "14": 0 });
+    expect(alternative?.remainder).toBe(7);
   });
 });

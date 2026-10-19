@@ -100,16 +100,47 @@ export function solve(tiers: readonly Tier[], budget: number): Plan {
   let spent = budget;
   while (!reach[0]![spent]) spent--;
 
-  const quantities: Record<string, number> = {};
   const tierUnits: number[] = [];
   let left = spent;
-  tiers.forEach((tier, j) => {
-    const tierSegs = segments[j]!;
+  segments.forEach((tierSegs, j) => {
     let units = maxUnitsWithin(tierSegs, left);
     while (!reach[j + 1]![left - tierCost(tierSegs, units)]) units--;
     left -= tierCost(tierSegs, units);
     tierUnits.push(units);
-    const split = splitTier(tier, tierSegs, units);
+  });
+
+  return toPlan(tiers, segments, tierUnits, budget);
+}
+
+/**
+ * Ignores the remainder: buys the most units of tier 1 that fit, then the most
+ * of tier 2 with the coins left over, and so on. This is the strict priority
+ * plan, which may leave coins that `solve` would have spent.
+ */
+export function solvePriorityFirst(tiers: readonly Tier[], budget: number): Plan {
+  validate(tiers, budget);
+  const segments = tiers.map(tierSegments);
+  const tierUnits: number[] = [];
+  let left = budget;
+  for (const tierSegs of segments) {
+    const units = maxUnitsWithin(tierSegs, left);
+    left -= tierCost(tierSegs, units);
+    tierUnits.push(units);
+  }
+  return toPlan(tiers, segments, tierUnits, budget);
+}
+
+function toPlan(
+  tiers: readonly Tier[],
+  segments: readonly Segment[][],
+  tierUnits: number[],
+  budget: number,
+): Plan {
+  const quantities: Record<string, number> = {};
+  let spent = 0;
+  tiers.forEach((tier, j) => {
+    spent += tierCost(segments[j]!, tierUnits[j]!);
+    const split = splitTier(tier, segments[j]!, tierUnits[j]!);
     tier.forEach((item, index) => {
       quantities[item.id] = split[index]!;
     });
@@ -122,4 +153,18 @@ export function solve(tiers: readonly Tier[], budget: number): Plan {
     remainder: budget - spent,
     totalUnits: tierUnits.reduce((sum, units) => sum + units, 0),
   };
+}
+
+export interface Solution {
+  /** Fewest coins left, then priority order (`solve`). */
+  plan: Plan;
+  /** Strict priority order (`solvePriorityFirst`), or null when it buys the same as `plan`. */
+  alternative: Plan | null;
+}
+
+export function solveWithAlternative(tiers: readonly Tier[], budget: number): Solution {
+  const plan = solve(tiers, budget);
+  const priorityFirst = solvePriorityFirst(tiers, budget);
+  const same = plan.tierUnits.every((units, j) => units === priorityFirst.tierUnits[j]);
+  return { plan, alternative: same ? null : priorityFirst };
 }
